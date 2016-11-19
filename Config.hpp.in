@@ -1,0 +1,5 @@
+#pragma once
+
+#define RESOURCES_PATH "@SPIN_RESOURCES_PATH@/"
+
+#define RESOURCE(resourcePath) ("@SPIN_RESOURCES_PATH@/" resourcePath)
