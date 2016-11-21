@@ -4,7 +4,7 @@
 #include "ImGuiApplication.hpp"
 #include "Mesh.hpp"
 #include "OrbitingCamera.hpp"
-#include "TexturedPhongEffect.hpp"
+#include "PhongShader.hpp"
 #include "Vertices.hpp"
 
 #include <memory>
@@ -44,7 +44,7 @@ private:
 
     const int cMaximumGravityHistorySize = 200;
 
-    std::shared_ptr<TexturedPhongEffect> _phongEffect;
+    std::shared_ptr<PhongShader> _phongEffect;
     std::shared_ptr<Mesh<VertexNormalTexCoords>> _cube;
 
     float _cubeSize;

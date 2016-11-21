@@ -38,7 +38,7 @@ void SpinApplication::onCreate()
 {
     ImGuiApplication::onCreate();
 
-    _phongEffect = std::make_shared<TexturedPhongEffect>();
+    _phongEffect = std::make_shared<PhongShader>();
     _phongEffect->create();
 
     _cube = createBox({1.0, 1.0, 1.0});
@@ -47,9 +47,7 @@ void SpinApplication::onCreate()
         glm::vec2{0.5f, 0.5f}
     );
 
-    std::string resourcePath = RESOURCE("checker-base.png");
-    std::cerr << "res path: " << resourcePath << std::endl;
-    _testTexture = loadTextureFromFile(RESOURCE("textures/checker-base.png"));
+    _testTexture = loadTextureFromFile(RESOURCE("textures/glass-tex.jpg"));
 
     updateProjectionMatrix();
 
@@ -86,10 +84,12 @@ void SpinApplication::onRender()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
 
-    _phongEffect->setProjectionMatrix(_projectionMatrix);
-    _phongEffect->setViewMatrix(_camera.getViewMatrix());
-    _phongEffect->setTexture(_testTexture);
+    _phongEffect->setModelMatrix({});
+    _phongEffect->setDiffuseTextureColor({0.0f, 0.0f, 0.0f, 0.0f});
+    _phongEffect->setSolidColor({1.0f, 0.0f, 0.0f, 1.0f});
     _phongEffect->begin();
+    _grid->render();
+    _phongEffect->end();
 
     if (_cubeRenderingEnabled)
     {
@@ -112,17 +112,23 @@ void SpinApplication::onRender()
         );
 
         glEnable(GL_BLEND);
+        glDisable(GL_DEPTH_TEST);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+        _phongEffect->setProjectionMatrix(_projectionMatrix);
+        _phongEffect->setViewMatrix(_camera.getViewMatrix());
+        _phongEffect->setDiffuseTextureColor({1.0f, 1.0f, 1.0f, 1.0f});
+        _phongEffect->setDiffuseTexture(_testTexture);
         _phongEffect->setModelMatrix(cubeTransformation);
+        _phongEffect->setSolidColor({0.0f, 0.0f, 0.0f, 0.5f});
+        _phongEffect->begin();
         _cube->render();
+        _phongEffect->end();
 
+        glEnable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
     }
 
-    _phongEffect->setModelMatrix({});
-    _grid->render();
-
-    _phongEffect->end();
 
     ImGuiApplication::onRender();
 }
