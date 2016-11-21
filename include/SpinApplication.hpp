@@ -8,6 +8,7 @@
 #include "Vertices.hpp"
 
 #include <memory>
+#include <vector>
 
 #include "glm/glm.hpp"
 
@@ -35,10 +36,35 @@ protected:
     virtual bool onResize() override;
 
     void updateProjectionMatrix();
+    void showBoxSettings();
+    void updateGravityChart();
 
 private:
+    float getGravity() const;
+
+    const int cMaximumGravityHistorySize = 200;
+
     std::shared_ptr<TexturedPhongEffect> _phongEffect;
     std::shared_ptr<Mesh<VertexNormalTexCoords>> _cube;
+
+    float _cubeSize;
+    float _cubeDensity;
+    glm::mat4 _cubeInitialRotation;
+
+    int _trajectoryLength;
+    float _angularVelocity;
+    float _zRotationDegrees;
+
+    bool _cubeRenderingEnabled;
+    bool _cubeDiagonalRenderingEnabled;
+    bool _trajectoryRenderingEnabled;
+    bool _gravitationVectorRenderingEnabled;
+    bool _gravitationPlaneRenderingEnabled;
+
+    bool _simulationEnabled;
+    bool _gravityEnabled;
+    float _gravityConstant;
+    std::vector<float> _gravityHistory;
 
     std::shared_ptr<fw::Grid> _grid;
     OrbitingCamera _camera;

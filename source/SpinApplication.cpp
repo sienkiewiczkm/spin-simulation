@@ -1,5 +1,6 @@
 #include "SpinApplication.hpp"
 
+#include <cmath>
 #include <iostream>
 
 #include "glm/gtc/matrix_transform.hpp"
@@ -14,7 +15,18 @@ namespace spin
 
 SpinApplication::SpinApplication():
     _enableCameraRotations{false},
-    _cameraRotationSensitivity{0.2, 0.2}
+    _cameraRotationSensitivity{0.2, 0.2},
+    _cubeSize{1.0f},
+    _cubeDensity{1.0f},
+    _gravityConstant{9.807f},
+    _simulationEnabled{false},
+    _gravityEnabled{false},
+    _trajectoryLength{500},
+    _cubeRenderingEnabled{true},
+    _cubeDiagonalRenderingEnabled{true},
+    _trajectoryRenderingEnabled{true},
+    _gravitationVectorRenderingEnabled{true},
+    _gravitationPlaneRenderingEnabled{true}
 {
 }
 
@@ -40,6 +52,18 @@ void SpinApplication::onCreate()
     _testTexture = loadTextureFromFile(RESOURCE("textures/checker-base.png"));
 
     updateProjectionMatrix();
+
+    _cubeInitialRotation = glm::rotate(
+        glm::mat4{},
+        glm::radians(35.254f),
+        glm::vec3{0.0f, 0.0f, 1.0f}
+    );
+
+    _cubeInitialRotation = glm::rotate(
+        _cubeInitialRotation,
+        glm::radians(-45.0f),
+        glm::vec3{1.0f, 0.0f, 0.0f}
+    );
 }
 
 void SpinApplication::onDestroy()
@@ -52,12 +76,8 @@ void SpinApplication::onUpdate(
 )
 {
     ImGuiApplication::onUpdate(deltaTime);
-
-    if (ImGui::Begin("Example window"))
-    {
-        ImGui::Text("This is an example window");
-    }
-    ImGui::End();
+    showBoxSettings();
+    updateGravityChart();
 }
 
 void SpinApplication::onRender()
@@ -68,11 +88,40 @@ void SpinApplication::onRender()
 
     _phongEffect->setProjectionMatrix(_projectionMatrix);
     _phongEffect->setViewMatrix(_camera.getViewMatrix());
-    _phongEffect->setModelMatrix({});
     _phongEffect->setTexture(_testTexture);
     _phongEffect->begin();
-    _cube->render();
+
+    if (_cubeRenderingEnabled)
+    {
+        glm::mat4 cubeTransformation = glm::rotate(
+            glm::mat4{},
+            glm::radians(_zRotationDegrees),
+            glm::vec3{0.0f, 0.0f, 1.0f}
+        );
+
+        cubeTransformation *= _cubeInitialRotation;
+
+        cubeTransformation = glm::translate(
+            cubeTransformation,
+            glm::vec3{_cubeSize / 2.0, _cubeSize / 2.0, _cubeSize / 2.0}
+        );
+
+        cubeTransformation = glm::scale(
+            cubeTransformation,
+            glm::vec3{_cubeSize, _cubeSize, _cubeSize}
+        );
+
+        glEnable(GL_BLEND);
+
+        _phongEffect->setModelMatrix(cubeTransformation);
+        _cube->render();
+
+        glDisable(GL_BLEND);
+    }
+
+    _phongEffect->setModelMatrix({});
     _grid->render();
+
     _phongEffect->end();
 
     ImGuiApplication::onRender();
@@ -133,6 +182,75 @@ void SpinApplication::updateProjectionMatrix()
     auto windowSize = getWindowSize();
     auto aspectRatio = static_cast<float>(windowSize.x) / windowSize.y;
     _projectionMatrix = glm::perspective(45.0f, aspectRatio, 0.5f, 100.0f);
+}
+
+void SpinApplication::showBoxSettings()
+{
+    ImGui::ShowTestWindow();
+    if (!ImGui::Begin("Simulation settings"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Checkbox("Enable simulation", &_simulationEnabled);
+
+    if (ImGui::CollapsingHeader("Simulation parameters"))
+    {
+        ImGui::DragFloat("Cube size", &_cubeSize, 0.005f);
+        ImGui::DragFloat("Cube density", &_cubeDensity, 0.001f);
+        ImGui::DragFloat("Cube rotation (deg)", &_zRotationDegrees, 0.5f);
+        ImGui::DragFloat("Angular velocity", &_angularVelocity, 0.001f);
+    }
+
+    if (ImGui::CollapsingHeader("Gravity"))
+    {
+        ImGui::Checkbox("Enable gravity", &_gravityEnabled);
+        ImGui::SliderFloat("Gravity", &_gravityConstant, 0.0f, 50.0f);
+        ImGui::PlotLines(
+            "Gravity history",
+            _gravityHistory.data(),
+            _gravityHistory.size(),
+            0,
+            nullptr,
+            0.0f,
+            51.0f,
+            ImVec2(0, 80)
+        );
+    }
+
+    if (ImGui::CollapsingHeader("Visuals"))
+    {
+        ImGui::Checkbox("Display cube", &_cubeRenderingEnabled);
+        ImGui::Checkbox("Display diagonal", &_cubeDiagonalRenderingEnabled);
+        ImGui::Checkbox("Display trajectory", &_trajectoryRenderingEnabled);
+        ImGui::SliderInt("Trajectory length", &_trajectoryLength, 0, 1000);
+        ImGui::Checkbox(
+            "Display gravity vector",
+            &_gravitationVectorRenderingEnabled
+        );
+        ImGui::Checkbox(
+            "Display gravity plane",
+            &_gravitationPlaneRenderingEnabled
+        );
+    }
+
+    ImGui::End();
+}
+
+void SpinApplication::updateGravityChart()
+{
+    _gravityHistory.push_back(getGravity());
+
+    if (_gravityHistory.size() > cMaximumGravityHistorySize)
+    {
+        _gravityHistory.erase(std::begin(_gravityHistory));
+    }
+}
+
+float SpinApplication::getGravity() const
+{
+    return _gravityEnabled ? _gravityConstant : 0.0f;
 }
 
 }
