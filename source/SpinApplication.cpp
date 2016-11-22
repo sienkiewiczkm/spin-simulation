@@ -4,9 +4,11 @@
 #include <iostream>
 
 #include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/quaternion.hpp"
 #include "imgui.h"
 
 #include "Config.hpp"
+#include "Shapes.hpp"
 #include "DebugShapes.hpp"
 #include "TextureUtils.hpp"
 
@@ -42,6 +44,11 @@ void SpinApplication::onCreate()
     _phongEffect->create();
 
     _cube = createBox({1.0, 1.0, 1.0});
+    _cone = createCone(1.0, 1.0);
+    _cylinder = std::make_shared<Mesh<VertexNormalTexCoords>>(
+        createCylinder(1.0, 1.0, 16)
+    );
+
     _grid = std::make_shared<fw::Grid>(
         glm::ivec2{32, 32},
         glm::vec2{0.5f, 0.5f}
@@ -120,15 +127,19 @@ void SpinApplication::onRender()
         _phongEffect->setDiffuseTextureColor({1.0f, 1.0f, 1.0f, 1.0f});
         _phongEffect->setDiffuseTexture(_testTexture);
         _phongEffect->setModelMatrix(cubeTransformation);
-        _phongEffect->setSolidColor({0.0f, 0.0f, 0.0f, 0.5f});
+        _phongEffect->setSolidColor({0.0f, 0.0f, 0.0f, 0.7f});
         _phongEffect->begin();
         _cube->render();
         _phongEffect->end();
 
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
+
     }
 
+    drawArrow({0, 0, 0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.02f);
+    drawArrow({0, 0, 0}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.02f);
+    drawArrow({0, 0, 0}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 0.02f);
 
     ImGuiApplication::onRender();
 }
@@ -252,6 +263,63 @@ void SpinApplication::updateGravityChart()
     {
         _gravityHistory.erase(std::begin(_gravityHistory));
     }
+}
+
+void SpinApplication::drawArrow(
+    glm::vec3 from,
+    glm::vec3 to,
+    glm::vec3 color,
+    float thickness
+)
+{
+    auto arrowThickness = 1.8f * thickness;
+    auto arrowLength = glm::length(to - from);
+
+    glm::mat4 coneScale = glm::scale(
+        glm::mat4{},
+        {arrowThickness, arrowThickness, arrowThickness}
+    );
+
+    glm::mat4 cylinderScale = glm::scale(
+        glm::mat4{},
+        {thickness, arrowLength - arrowThickness, thickness}
+    );
+
+    auto rotationQuat = glm::quat(
+        glm::vec3{0, 1.0f, 0.0f},
+        glm::normalize(to - from)
+    );
+
+    auto rotationMat = glm::mat4_cast(rotationQuat);
+
+    auto coneTranslation = glm::translate(
+        glm::mat4{},
+        from + (to - from) * ((arrowLength - arrowThickness)/(arrowLength))
+    );
+
+    auto cylinderTranslation = glm::translate(
+        glm::mat4{},
+        from + (to - from) * (arrowLength - arrowThickness)/(2.0f * arrowLength)
+    );
+
+    glm::mat4 coneTransformation = coneTranslation * rotationMat * coneScale;
+    glm::mat4 cylinderTransformation = cylinderTranslation * rotationMat
+        * cylinderScale;
+
+    _phongEffect->setProjectionMatrix(_projectionMatrix);
+    _phongEffect->setViewMatrix(_camera.getViewMatrix());
+    _phongEffect->setDiffuseTextureColor({0.0f, 0.0f, 0.0f, 0.0f});
+    _phongEffect->setSolidColor(glm::vec4{color, 1.0f});
+
+    _phongEffect->setModelMatrix(coneTransformation);
+    _phongEffect->begin();
+    _cone->render();
+    _phongEffect->end();
+
+    _phongEffect->setModelMatrix(cylinderTransformation);
+    _phongEffect->begin();
+    _cylinder->render();
+    _phongEffect->end();
 }
 
 float SpinApplication::getGravity() const

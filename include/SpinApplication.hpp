@@ -39,6 +39,13 @@ protected:
     void showBoxSettings();
     void updateGravityChart();
 
+    void drawArrow(
+        glm::vec3 from,
+        glm::vec3 to,
+        glm::vec3 color,
+        float thickness
+    );
+
 private:
     float getGravity() const;
 
@@ -46,6 +53,9 @@ private:
 
     std::shared_ptr<PhongShader> _phongEffect;
     std::shared_ptr<Mesh<VertexNormalTexCoords>> _cube;
+
+    std::shared_ptr<Mesh<VertexNormalTexCoords>> _cone;
+    std::shared_ptr<Mesh<VertexNormalTexCoords>> _cylinder;
 
     float _cubeSize;
     float _cubeDensity;
