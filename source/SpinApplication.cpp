@@ -5,9 +5,11 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/quaternion.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "imgui.h"
 
 #include "Config.hpp"
+#include "Common.hpp"
 #include "Shapes.hpp"
 #include "DebugShapes.hpp"
 #include "TextureUtils.hpp"
@@ -58,17 +60,14 @@ void SpinApplication::onCreate()
 
     updateProjectionMatrix();
 
-    _cubeInitialRotation = glm::rotate(
-        glm::mat4{},
-        glm::radians(35.254f),
-        glm::vec3{0.0f, 0.0f, 1.0f}
+    _cubeInitialQuaternion = glm::angleAxis(
+        glm::radians(-90.0),
+        glm::normalize(glm::dvec3{1.0, 0.0, 0.0})
     );
 
-    _cubeInitialRotation = glm::rotate(
-        _cubeInitialRotation,
-        glm::radians(-45.0f),
-        glm::vec3{1.0f, 0.0f, 0.0f}
-    );
+    _cubeInitialRotation = glm::mat4_cast(_cubeInitialQuaternion);
+
+    _eulerEquations.setPreviousQuaternion(_cubeInitialQuaternion);
 }
 
 void SpinApplication::onDestroy()
@@ -81,6 +80,40 @@ void SpinApplication::onUpdate(
 )
 {
     ImGuiApplication::onUpdate(deltaTime);
+
+    if (_simulationEnabled)
+    {
+        auto deltaSeconds = std::chrono::duration<double>(deltaTime);
+        _eulerEquations.setInertiaTensor(calculateBoxInertiaTensor());
+
+        auto boxMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
+        _eulerEquations.setPreviousAngularVelocity(_angularVelocity);
+
+        glm::dvec3 force{0, -boxMass*getGravity(), 0};
+        auto eigenvectorMatrix = calculateEigenvectorMatrix();
+        auto invEigenvectorMatrix = glm::inverse(eigenvectorMatrix);
+        _bodyForcePoint = invEigenvectorMatrix * glm::dvec3{
+            _cubeSize / 2,
+            _cubeSize / 2,
+            _cubeSize / 2
+        };
+
+        _eulerEquations.setBodyForcePoint(_bodyForcePoint);
+        _eulerEquations.setTorque(force);
+
+        /*
+        auto torque = glm::cross(
+            _bodyForcePoint,
+            glm::inverse(quaternionMat) * force
+        );
+        */
+
+        _eulerEquations.update(deltaSeconds.count());
+        _angularVelocity = _eulerEquations.getAngularVelocity();
+        auto quat = _eulerEquations.getQuaternion();
+        _cubeInitialRotation = glm::mat4_cast(quat);
+    }
+
     showBoxSettings();
     updateGravityChart();
 }
@@ -100,13 +133,16 @@ void SpinApplication::onRender()
 
     if (_cubeRenderingEnabled)
     {
-        glm::mat4 cubeTransformation = glm::rotate(
-            glm::mat4{},
-            glm::radians(_zRotationDegrees),
-            glm::vec3{0.0f, 0.0f, 1.0f}
-        );
+        glm::mat4 cubeTransformation = _cubeInitialRotation;
 
-        cubeTransformation *= _cubeInitialRotation;
+        auto eigenvectorMatrix = calculateEigenvectorMatrix();
+        auto invEigen = glm::inverse(eigenvectorMatrix);
+        cubeTransformation *= glm::mat4{
+            { invEigen[0], 0 },
+            { invEigen[1], 0 },
+            { invEigen[2], 0 },
+            { 0, 0, 0, 1.0 }
+        };
 
         cubeTransformation = glm::translate(
             cubeTransformation,
@@ -137,9 +173,9 @@ void SpinApplication::onRender()
 
     }
 
-    drawArrow({0, 0, 0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.02f);
-    drawArrow({0, 0, 0}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.02f);
-    drawArrow({0, 0, 0}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 0.02f);
+    drawArrow({0, 0, 0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.01f);
+    drawArrow({0, 0, 0}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.01f);
+    drawArrow({0, 0, 0}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 0.01f);
 
     ImGuiApplication::onRender();
 }
@@ -217,7 +253,11 @@ void SpinApplication::showBoxSettings()
         ImGui::DragFloat("Cube size", &_cubeSize, 0.005f);
         ImGui::DragFloat("Cube density", &_cubeDensity, 0.001f);
         ImGui::DragFloat("Cube rotation (deg)", &_zRotationDegrees, 0.5f);
-        ImGui::DragFloat("Angular velocity", &_angularVelocity, 0.001f);
+        ImGui::DragFloat3(
+            "Angular velocity",
+            glm::value_ptr(_angularVelocity),
+            0.001f
+        );
     }
 
     if (ImGui::CollapsingHeader("Gravity"))
@@ -320,6 +360,53 @@ void SpinApplication::drawArrow(
     _phongEffect->begin();
     _cylinder->render();
     _phongEffect->end();
+}
+
+glm::dmat3 SpinApplication::calculateBoxInertiaTensor()
+{
+    return calculateDiagonalInertiaTensor();
+}
+
+glm::dmat3 SpinApplication::calculateInertiaTensorOfPointMass(
+    glm::dvec3 position,
+    double mass
+)
+{
+    double xSq = position.x * position.x;
+    double ySq = position.y * position.y;
+    double zSq = position.z * position.z;
+
+    double xy = position.x * position.y;
+    double xz = position.x * position.z;
+    double yz = position.y * position.z;
+
+    return mass * glm::dmat3{
+        { ySq + zSq, -xy, -xz},
+        { -xy, xSq + zSq, -yz},
+        { -xz, -yz, ySq + xSq}
+    };
+}
+
+glm::dmat3 SpinApplication::calculateEigenvectorMatrix() const
+{
+    return glm::dmat3{
+        {-1.0, 0.0, 1.0},
+        {-1.0, 1.0, 0.0},
+        { 1.0, 1.0, 1.0}
+    };
+}
+
+glm::dmat3 SpinApplication::calculateDiagonalInertiaTensor() const
+{
+    auto mass = _cubeSize * _cubeSize * _cubeSize * _cubeDensity;
+    auto lambda1 = 11.0 * _cubeSize * _cubeSize * mass / 12.0;
+    auto lambda2 = _cubeSize * _cubeSize * mass / 6.0;
+
+    return glm::dmat3{
+        {lambda1, 0.0, 0.0},
+        {0.0, lambda1, 0.0},
+        {0.0, 0.0, lambda2}
+    };
 }
 
 float SpinApplication::getGravity() const

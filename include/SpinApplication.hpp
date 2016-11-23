@@ -6,11 +6,13 @@
 #include "OrbitingCamera.hpp"
 #include "PhongShader.hpp"
 #include "Vertices.hpp"
+#include "EulerRotationEquations.hpp"
 
 #include <memory>
 #include <vector>
 
 #include "glm/glm.hpp"
+#include "glm/gtc/quaternion.hpp"
 
 namespace spin
 {
@@ -46,6 +48,15 @@ protected:
         float thickness
     );
 
+    glm::dmat3 calculateBoxInertiaTensor();
+    glm::dmat3 calculateInertiaTensorOfPointMass(
+        glm::dvec3 position,
+        double mass
+    );
+
+    glm::dmat3 calculateEigenvectorMatrix() const;
+    glm::dmat3 calculateDiagonalInertiaTensor() const;
+
 private:
     float getGravity() const;
 
@@ -59,10 +70,11 @@ private:
 
     float _cubeSize;
     float _cubeDensity;
+    glm::dquat _cubeInitialQuaternion;
     glm::mat4 _cubeInitialRotation;
 
     int _trajectoryLength;
-    float _angularVelocity;
+    glm::vec3 _angularVelocity;
     float _zRotationDegrees;
 
     bool _cubeRenderingEnabled;
@@ -76,10 +88,15 @@ private:
     float _gravityConstant;
     std::vector<float> _gravityHistory;
 
+    glm::dvec3 _bodyForcePoint;
+    glm::dvec3 _forceVector;
+
     std::shared_ptr<fw::Grid> _grid;
     OrbitingCamera _camera;
     glm::mat4 _projectionMatrix;
     bool _enableCameraRotations;
+
+    EulerRotationEquations _eulerEquations;
 
     glm::dvec2 _cameraRotationSensitivity;
     GLuint _testTexture;

@@ -22,6 +22,7 @@ include_directories(
 
 add_library(${PROJECT_NAME_LIB}
     source/SpinApplication.cpp
+    source/EulerRotationEquations.cpp
     source/PhongShader.cpp
     source/Shapes.cpp
 )
