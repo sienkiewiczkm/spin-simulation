@@ -58,6 +58,14 @@ protected:
     glm::dmat3 calculateDiagonalInertiaTensor() const;
 
 private:
+    void updateRigidBody(
+        const std::chrono::high_resolution_clock::duration& deltaTime
+    );
+
+    void renderGroundGrid();
+    void renderFrame();
+    void renderCube();
+
     float getGravity() const;
 
     const int cMaximumGravityHistorySize = 200;

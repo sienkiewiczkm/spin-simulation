@@ -81,41 +81,10 @@ void SpinApplication::onUpdate(
 {
     ImGuiApplication::onUpdate(deltaTime);
 
-    if (_simulationEnabled)
-    {
-        auto deltaSeconds = std::chrono::duration<double>(deltaTime);
-        _eulerEquations.setInertiaTensor(calculateBoxInertiaTensor());
-
-        auto boxMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
-        _eulerEquations.setPreviousAngularVelocity(_angularVelocity);
-
-        glm::dvec3 force{0, -boxMass*getGravity(), 0};
-        auto eigenvectorMatrix = calculateEigenvectorMatrix();
-        auto invEigenvectorMatrix = glm::inverse(eigenvectorMatrix);
-        _bodyForcePoint = invEigenvectorMatrix * glm::dvec3{
-            _cubeSize / 2,
-            _cubeSize / 2,
-            _cubeSize / 2
-        };
-
-        _eulerEquations.setBodyForcePoint(_bodyForcePoint);
-        _eulerEquations.setTorque(force);
-
-        /*
-        auto torque = glm::cross(
-            _bodyForcePoint,
-            glm::inverse(quaternionMat) * force
-        );
-        */
-
-        _eulerEquations.update(deltaSeconds.count());
-        _angularVelocity = _eulerEquations.getAngularVelocity();
-        auto quat = _eulerEquations.getQuaternion();
-        _cubeInitialRotation = glm::mat4_cast(quat);
-    }
-
     showBoxSettings();
     updateGravityChart();
+
+    if (_simulationEnabled) { updateRigidBody(deltaTime); }
 }
 
 void SpinApplication::onRender()
@@ -124,58 +93,9 @@ void SpinApplication::onRender()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
 
-    _phongEffect->setModelMatrix({});
-    _phongEffect->setDiffuseTextureColor({0.0f, 0.0f, 0.0f, 0.0f});
-    _phongEffect->setSolidColor({1.0f, 0.0f, 0.0f, 1.0f});
-    _phongEffect->begin();
-    _grid->render();
-    _phongEffect->end();
-
-    if (_cubeRenderingEnabled)
-    {
-        glm::mat4 cubeTransformation = _cubeInitialRotation;
-
-        auto eigenvectorMatrix = calculateEigenvectorMatrix();
-        auto invEigen = glm::inverse(eigenvectorMatrix);
-        cubeTransformation *= glm::mat4{
-            { invEigen[0], 0 },
-            { invEigen[1], 0 },
-            { invEigen[2], 0 },
-            { 0, 0, 0, 1.0 }
-        };
-
-        cubeTransformation = glm::translate(
-            cubeTransformation,
-            glm::vec3{_cubeSize / 2.0, _cubeSize / 2.0, _cubeSize / 2.0}
-        );
-
-        cubeTransformation = glm::scale(
-            cubeTransformation,
-            glm::vec3{_cubeSize, _cubeSize, _cubeSize}
-        );
-
-        glEnable(GL_BLEND);
-        glDisable(GL_DEPTH_TEST);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        _phongEffect->setProjectionMatrix(_projectionMatrix);
-        _phongEffect->setViewMatrix(_camera.getViewMatrix());
-        _phongEffect->setDiffuseTextureColor({1.0f, 1.0f, 1.0f, 1.0f});
-        _phongEffect->setDiffuseTexture(_testTexture);
-        _phongEffect->setModelMatrix(cubeTransformation);
-        _phongEffect->setSolidColor({0.0f, 0.0f, 0.0f, 0.7f});
-        _phongEffect->begin();
-        _cube->render();
-        _phongEffect->end();
-
-        glEnable(GL_DEPTH_TEST);
-        glDisable(GL_BLEND);
-
-    }
-
-    drawArrow({0, 0, 0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.01f);
-    drawArrow({0, 0, 0}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.01f);
-    drawArrow({0, 0, 0}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 0.01f);
+    renderFrame();
+    renderGroundGrid();
+    if (_cubeRenderingEnabled) { renderCube(); }
 
     ImGuiApplication::onRender();
 }
@@ -412,6 +332,92 @@ glm::dmat3 SpinApplication::calculateDiagonalInertiaTensor() const
 float SpinApplication::getGravity() const
 {
     return _gravityEnabled ? _gravityConstant : 0.0f;
+}
+
+void SpinApplication::updateRigidBody(
+    const std::chrono::high_resolution_clock::duration& deltaTime
+)
+{
+    auto deltaSeconds = std::chrono::duration<double>(deltaTime);
+    _eulerEquations.setInertiaTensor(calculateBoxInertiaTensor());
+
+    auto boxMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
+    _eulerEquations.setPreviousAngularVelocity(_angularVelocity);
+
+    glm::dvec3 force{0, -boxMass*getGravity(), 0};
+    auto eigenvectorMatrix = calculateEigenvectorMatrix();
+    auto invEigenvectorMatrix = glm::inverse(eigenvectorMatrix);
+    _bodyForcePoint = invEigenvectorMatrix * glm::dvec3{
+        _cubeSize / 2,
+        _cubeSize / 2,
+        _cubeSize / 2
+    };
+
+    _eulerEquations.setBodyForcePoint(_bodyForcePoint);
+    _eulerEquations.setTorque(force);
+
+    _eulerEquations.update(deltaSeconds.count());
+    _angularVelocity = _eulerEquations.getAngularVelocity();
+    auto quat = _eulerEquations.getQuaternion();
+    _cubeInitialRotation = glm::mat4_cast(quat);
+}
+
+void SpinApplication::renderGroundGrid()
+{
+    _phongEffect->setModelMatrix({});
+    _phongEffect->setDiffuseTextureColor({0.0f, 0.0f, 0.0f, 0.0f});
+    _phongEffect->setSolidColor({1.0f, 0.0f, 0.0f, 1.0f});
+    _phongEffect->begin();
+    _grid->render();
+    _phongEffect->end();
+}
+
+void SpinApplication::renderFrame()
+{
+    drawArrow({0, 0, 0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 0.01f);
+    drawArrow({0, 0, 0}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 0.01f);
+    drawArrow({0, 0, 0}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 0.01f);
+}
+
+void SpinApplication::renderCube()
+{
+    glm::mat4 cubeTransformation = _cubeInitialRotation;
+
+    auto eigenvectorMatrix = calculateEigenvectorMatrix();
+    auto invEigen = glm::inverse(eigenvectorMatrix);
+    cubeTransformation *= glm::mat4{
+        { invEigen[0], 0 },
+        { invEigen[1], 0 },
+        { invEigen[2], 0 },
+        { 0, 0, 0, 1.0 }
+    };
+
+    cubeTransformation = glm::translate(
+        cubeTransformation,
+        glm::vec3{_cubeSize / 2.0, _cubeSize / 2.0, _cubeSize / 2.0}
+    );
+
+    cubeTransformation = glm::scale(
+        cubeTransformation,
+        glm::vec3{_cubeSize, _cubeSize, _cubeSize}
+    );
+
+    glEnable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    _phongEffect->setProjectionMatrix(_projectionMatrix);
+    _phongEffect->setViewMatrix(_camera.getViewMatrix());
+    _phongEffect->setDiffuseTextureColor({1.0f, 1.0f, 1.0f, 1.0f});
+    _phongEffect->setDiffuseTexture(_testTexture);
+    _phongEffect->setModelMatrix(cubeTransformation);
+    _phongEffect->setSolidColor({0.0f, 0.0f, 0.0f, 0.7f});
+    _phongEffect->begin();
+    _cube->render();
+    _phongEffect->end();
+
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
 }
 
 }
