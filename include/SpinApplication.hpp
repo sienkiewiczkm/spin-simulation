@@ -65,6 +65,9 @@ private:
     void renderGroundGrid();
     void renderFrame();
     void renderCube();
+    void renderCubeDiagonal();
+    void renderTrajectory();
+    void renderGravityVector();
 
     float getGravity() const;
 
@@ -85,6 +88,8 @@ private:
     glm::vec3 _angularVelocity;
     float _zRotationDegrees;
 
+    double _testDiagonalRotationX;
+    double _testDiagonalRotationY;
     bool _cubeRenderingEnabled;
     bool _cubeDiagonalRenderingEnabled;
     bool _trajectoryRenderingEnabled;

@@ -30,7 +30,9 @@ SpinApplication::SpinApplication():
     _cubeDiagonalRenderingEnabled{true},
     _trajectoryRenderingEnabled{true},
     _gravitationVectorRenderingEnabled{true},
-    _gravitationPlaneRenderingEnabled{true}
+    _gravitationPlaneRenderingEnabled{true},
+    _testDiagonalRotationX{0.0},
+    _testDiagonalRotationY{0.0}
 {
 }
 
@@ -96,6 +98,8 @@ void SpinApplication::onRender()
     renderFrame();
     renderGroundGrid();
     if (_cubeRenderingEnabled) { renderCube(); }
+    if (_cubeDiagonalRenderingEnabled) { renderCubeDiagonal(); }
+    if (_trajectoryRenderingEnabled) { renderTrajectory(); }
 
     ImGuiApplication::onRender();
 }
@@ -343,6 +347,9 @@ void SpinApplication::updateRigidBody(
     auto deltaSeconds = std::chrono::duration<double>(deltaTime);
     _eulerEquations.setInertiaTensor(calculateBoxInertiaTensor());
 
+    _testDiagonalRotationX += 0.3 * deltaSeconds.count();
+    _testDiagonalRotationY += 0.1 * deltaSeconds.count();
+
     auto boxMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
     _eulerEquations.setPreviousAngularVelocity(_angularVelocity);
 
@@ -420,6 +427,32 @@ void SpinApplication::renderCube()
 
     glEnable(GL_DEPTH_TEST);
     glDisable(GL_BLEND);
+}
+
+void SpinApplication::renderCubeDiagonal()
+{
+    double diagonalLength = _cubeSize * sqrt(3.0);
+
+    // todo: transform cube diagonal using real matrices
+    auto rotation = glm::rotate(
+        glm::dmat4{},
+        _testDiagonalRotationY,
+        {0, 1, 0}
+    );
+
+    rotation = glm::rotate(rotation, _testDiagonalRotationX, {1, 0, 0});
+    glm::dvec4 objectSpaceDiagonal{0, diagonalLength, 0, 1.0};
+
+    glm::vec3 worldSpaceDiagonal{glm::dvec3{rotation * objectSpaceDiagonal}};
+    drawArrow({0, 0, 0}, worldSpaceDiagonal, {1.0f, 0.0f, 1.0f}, 0.02f);
+}
+
+void SpinApplication::renderTrajectory()
+{
+}
+
+void SpinApplication::renderGravityVector()
+{
 }
 
 }
