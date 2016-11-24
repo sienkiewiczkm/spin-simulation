@@ -25,7 +25,6 @@ SpinApplication::SpinApplication():
     _gravityConstant{9.807f},
     _simulationEnabled{false},
     _gravityEnabled{false},
-    _trajectoryLength{500},
     _cubeRenderingEnabled{true},
     _cubeDiagonalRenderingEnabled{true},
     _trajectoryRenderingEnabled{true},
@@ -57,6 +56,8 @@ void SpinApplication::onCreate()
         glm::ivec2{32, 32},
         glm::vec2{0.5f, 0.5f}
     );
+
+    _dynamicPolygonalLine = std::make_shared<DynamicPolygonalLine>(10000);
 
     _testTexture = loadTextureFromFile(RESOURCE("textures/glass-tex.jpg"));
 
@@ -231,7 +232,8 @@ void SpinApplication::showBoxSettings()
         ImGui::Checkbox("Display cube", &_cubeRenderingEnabled);
         ImGui::Checkbox("Display diagonal", &_cubeDiagonalRenderingEnabled);
         ImGui::Checkbox("Display trajectory", &_trajectoryRenderingEnabled);
-        ImGui::SliderInt("Trajectory length", &_trajectoryLength, 0, 1000);
+        if (ImGui::Button("Clear trajectory")) { _trajectory.clear(); }
+
         ImGui::Checkbox(
             "Display gravity vector",
             &_gravitationVectorRenderingEnabled
@@ -470,11 +472,35 @@ void SpinApplication::renderCubeDiagonal()
     glm::dvec4 objectSpaceDiagonal{0, diagonalLength, 0, 1.0};
 
     glm::vec3 worldSpaceDiagonal{glm::dvec3{rotation * objectSpaceDiagonal}};
+
+    // todo: move this part somewhere elese
+    if (_trajectory.size() + 1 >= _dynamicPolygonalLine->getNumMaxVertices())
+    {
+        // todo: unefficient, create cyclic vector for that purpose
+        _trajectory.erase(std::begin(_trajectory));
+    }
+    _trajectory.push_back(worldSpaceDiagonal);
+
     drawArrow({0, 0, 0}, worldSpaceDiagonal, {1.0f, 0.0f, 1.0f}, 0.02f);
 }
 
 void SpinApplication::renderTrajectory()
 {
+    std::vector<fw::VertexColor> vertices;
+    const glm::vec3 vertexColor{1.0f, 1.0f, 1.0f};
+    for (const auto& position: _trajectory)
+    {
+        vertices.push_back({position, vertexColor});
+    }
+
+    _dynamicPolygonalLine->setVertices(vertices);
+
+    _phongEffect->setModelMatrix({});
+    _phongEffect->setDiffuseTextureColor({0.0f, 0.0f, 0.0f, 0.0f});
+    _phongEffect->setSolidColor({1.0f, 0.0f, 0.0f, 1.0f});
+    _phongEffect->begin();
+    _dynamicPolygonalLine->render();
+    _phongEffect->end();
 }
 
 void SpinApplication::renderGravityVector()

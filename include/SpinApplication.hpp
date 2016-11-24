@@ -7,6 +7,7 @@
 #include "PhongShader.hpp"
 #include "Vertices.hpp"
 #include "EulerRotationEquations.hpp"
+#include "DynamicPolygonalLine.hpp"
 
 #include <memory>
 #include <vector>
@@ -84,7 +85,6 @@ private:
     glm::dquat _cubeInitialQuaternion;
     glm::mat4 _cubeInitialRotation;
 
-    int _trajectoryLength;
     float _diagonalAngularVelocity;
     glm::vec3 _angularVelocity;
     float _zRotationDegrees;
@@ -99,6 +99,8 @@ private:
     bool _gravitationVectorRenderingEnabled;
     bool _gravitationPlaneRenderingEnabled;
 
+    std::vector<glm::vec3> _trajectory;
+    std::shared_ptr<DynamicPolygonalLine> _dynamicPolygonalLine;
 
     bool _simulationEnabled;
     bool _gravityEnabled;

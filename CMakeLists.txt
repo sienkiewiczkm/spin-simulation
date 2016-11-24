@@ -21,10 +21,11 @@ include_directories(
 )
 
 add_library(${PROJECT_NAME_LIB}
-    source/SpinApplication.cpp
+    source/DynamicPolygonalLine.cpp
     source/EulerRotationEquations.cpp
     source/PhongShader.cpp
     source/Shapes.cpp
+    source/SpinApplication.cpp
 )
 
 add_executable(${PROJECT_NAME}
