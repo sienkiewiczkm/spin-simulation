@@ -171,17 +171,43 @@ void SpinApplication::showBoxSettings()
     }
 
     ImGui::Checkbox("Enable simulation", &_simulationEnabled);
+    ImGui::Button("Restart simulation");
 
     if (ImGui::CollapsingHeader("Simulation parameters"))
     {
         ImGui::DragFloat("Cube size", &_cubeSize, 0.005f);
         ImGui::DragFloat("Cube density", &_cubeDensity, 0.001f);
-        ImGui::DragFloat("Cube rotation (deg)", &_zRotationDegrees, 0.5f);
-        ImGui::DragFloat3(
-            "Angular velocity",
-            glm::value_ptr(_angularVelocity),
-            0.001f
+
+        ImGui::Separator();
+        ImGui::Text("Initial simulation parameters:");
+        ImGui::DragFloat("Diagonal tilt angle", &_zRotationDegrees, 0.5f);
+        ImGui::DragFloat(
+            "Diagonal angular velocity",
+            &_diagonalAngularVelocity,
+            0.01f
         );
+
+        ImGui::Separator();
+        ImGui::Checkbox(
+            "Show dangerous settings",
+            &_showDangerousSimulationSettings
+        );
+
+        if (_showDangerousSimulationSettings)
+        {
+            ImGui::DragFloat3(
+                "Angular velocity",
+                glm::value_ptr(_angularVelocity),
+                0.001f
+            );
+
+            glm::quat displayQuat{_cubeInitialQuaternion};
+            ImGui::DragFloat4(
+                "Quaternion",
+                glm::value_ptr(displayQuat),
+                0.001f
+            );
+        }
     }
 
     if (ImGui::CollapsingHeader("Gravity"))

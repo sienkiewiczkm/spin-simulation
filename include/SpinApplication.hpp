@@ -85,16 +85,20 @@ private:
     glm::mat4 _cubeInitialRotation;
 
     int _trajectoryLength;
+    float _diagonalAngularVelocity;
     glm::vec3 _angularVelocity;
     float _zRotationDegrees;
 
     double _testDiagonalRotationX;
     double _testDiagonalRotationY;
+
+    bool _showDangerousSimulationSettings;
     bool _cubeRenderingEnabled;
     bool _cubeDiagonalRenderingEnabled;
     bool _trajectoryRenderingEnabled;
     bool _gravitationVectorRenderingEnabled;
     bool _gravitationPlaneRenderingEnabled;
+
 
     bool _simulationEnabled;
     bool _gravityEnabled;
