@@ -234,15 +234,16 @@ void SpinApplication::drawArrow(
 {
     auto arrowThickness = 1.8f * thickness;
     auto arrowLength = glm::length(to - from);
+    auto arrowHeadLength = std::min(2.0f * arrowThickness, arrowLength);
 
     glm::mat4 coneScale = glm::scale(
         glm::mat4{},
-        {arrowThickness, arrowThickness, arrowThickness}
+        {arrowThickness, arrowHeadLength, arrowThickness}
     );
 
     glm::mat4 cylinderScale = glm::scale(
         glm::mat4{},
-        {thickness, arrowLength - arrowThickness, thickness}
+        {thickness, arrowLength - arrowHeadLength, thickness}
     );
 
     auto rotationQuat = glm::quat(
@@ -254,12 +255,13 @@ void SpinApplication::drawArrow(
 
     auto coneTranslation = glm::translate(
         glm::mat4{},
-        from + (to - from) * ((arrowLength - arrowThickness)/(arrowLength))
+        from + (to - from) * ((arrowLength - arrowHeadLength)/(arrowLength))
     );
 
     auto cylinderTranslation = glm::translate(
         glm::mat4{},
-        from + (to - from) * (arrowLength - arrowThickness)/(2.0f * arrowLength)
+        from + (to - from) * (arrowLength - arrowHeadLength)
+            / (2.0f * arrowLength)
     );
 
     glm::mat4 coneTransformation = coneTranslation * rotationMat * coneScale;
