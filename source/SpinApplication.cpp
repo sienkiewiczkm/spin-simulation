@@ -375,7 +375,7 @@ void SpinApplication::renderGroundGrid()
 {
     _phongEffect->setModelMatrix({});
     _phongEffect->setDiffuseTextureColor({0.0f, 0.0f, 0.0f, 0.0f});
-    _phongEffect->setSolidColor({1.0f, 0.0f, 0.0f, 1.0f});
+    _phongEffect->setSolidColor({0.4f, 0.4f, 0.4f, 1.0f});
     _phongEffect->begin();
     _grid->render();
     _phongEffect->end();
