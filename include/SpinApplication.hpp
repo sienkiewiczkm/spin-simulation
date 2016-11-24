@@ -55,10 +55,9 @@ protected:
         double mass
     );
 
-    glm::dmat3 calculateEigenvectorMatrix() const;
-    glm::dmat3 calculateDiagonalInertiaTensor() const;
-
 private:
+    void setupSimulation();
+
     void updateRigidBody(
         const std::chrono::high_resolution_clock::duration& deltaTime
     );
@@ -69,6 +68,8 @@ private:
     void renderCubeDiagonal();
     void renderTrajectory();
     void renderGravityVector();
+
+    void addTrajectoryPoint(glm::vec3 trajectoryPoint);
 
     float getGravity() const;
 
@@ -82,15 +83,12 @@ private:
 
     float _cubeSize;
     float _cubeDensity;
-    glm::dquat _cubeInitialQuaternion;
-    glm::mat4 _cubeInitialRotation;
+    glm::dquat _cubeVisualAdjustmentQuaternion;
+    glm::dquat _cubeQuaternion;
 
-    float _diagonalAngularVelocity;
     glm::vec3 _angularVelocity;
-    float _zRotationDegrees;
-
-    double _testDiagonalRotationX;
-    double _testDiagonalRotationY;
+    float _diagonalAngularVelocity;
+    float _diagonalTiltAngle;
 
     bool _showDangerousSimulationSettings;
     bool _cubeRenderingEnabled;
@@ -115,7 +113,7 @@ private:
     glm::mat4 _projectionMatrix;
     bool _enableCameraRotations;
 
-    EulerRotationEquations _eulerEquations;
+    std::shared_ptr<EulerRotationEquations> _eulerEquations;
 
     glm::dvec2 _cameraRotationSensitivity;
     GLuint _testTexture;

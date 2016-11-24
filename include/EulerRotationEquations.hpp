@@ -17,8 +17,7 @@ public:
     void setPreviousQuaternion(glm::dquat quaternion);
     void setPreviousAngularVelocity(glm::dvec3 angularVelocity);
 
-    void setBodyForcePoint(glm::dvec3 bodyForcePoint);
-    void setTorque(glm::dvec3 torque);
+    void setExternalForce(glm::dvec3 point, glm::dvec3 force);
     void setInertiaTensor(glm::dmat3 inertiaTensor);
 
     void update(double dt);
@@ -48,8 +47,8 @@ protected:
 private:
     glm::dvec3 _previousAngularVelocity;
     glm::dquat _previousQuaternion;
-    glm::dvec3 _torque;
-    glm::dvec3 _bodyForcePoint;
+    glm::dvec3 _forcePoint;
+    glm::dvec3 _force;
     glm::dmat3 _inertiaTensor, _inertiaTensorInv;
     glm::dvec3 _angularVelocity;
     glm::dquat _quaternion;

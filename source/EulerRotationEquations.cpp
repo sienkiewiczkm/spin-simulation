@@ -22,14 +22,13 @@ void EulerRotationEquations::setPreviousAngularVelocity(
     _angularVelocity = angularVelocity;
 }
 
-void EulerRotationEquations::setTorque(glm::dvec3 torque)
+void EulerRotationEquations::setExternalForce(
+    glm::dvec3 forcePoint,
+    glm::dvec3 force
+)
 {
-    _torque = torque;
-}
-
-void EulerRotationEquations::setBodyForcePoint(glm::dvec3 bodyForcePoint)
-{
-    _bodyForcePoint = bodyForcePoint;
+    _forcePoint = forcePoint;
+    _force = force;
 }
 
 void EulerRotationEquations::setInertiaTensor(glm::dmat3 inertiaTensor)
@@ -99,15 +98,15 @@ void EulerRotationEquations::evaluateFunction(
 
     auto quaternionMat = glm::mat3_cast(glm::normalize(quaternion));
     auto torque = glm::cross(
-        _bodyForcePoint,
-        glm::inverse(quaternionMat) * _torque
+        _forcePoint,
+        glm::inverse(quaternionMat) * _force
     );
 
     auto IW = _inertiaTensor * angularVelocity;
     auto angularMomentumDerivative = _inertiaTensorInv *
         (torque + glm::cross(IW, angularVelocity));
     auto quaternionDerivative =
-        (glm::dquat{0, angularVelocity} * glm::normalize(quaternion)) / 2.0;
+        (glm::normalize(quaternion) * glm::dquat{0, angularVelocity}) / 2.0;
 
     packVector(output, angularMomentumDerivative, quaternionDerivative);
 }

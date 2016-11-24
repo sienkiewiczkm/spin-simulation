@@ -29,9 +29,7 @@ SpinApplication::SpinApplication():
     _cubeDiagonalRenderingEnabled{true},
     _trajectoryRenderingEnabled{true},
     _gravitationVectorRenderingEnabled{true},
-    _gravitationPlaneRenderingEnabled{true},
-    _testDiagonalRotationX{0.0},
-    _testDiagonalRotationY{0.0}
+    _gravitationPlaneRenderingEnabled{true}
 {
 }
 
@@ -63,14 +61,12 @@ void SpinApplication::onCreate()
 
     updateProjectionMatrix();
 
-    _cubeInitialQuaternion = glm::angleAxis(
-        glm::radians(-90.0),
-        glm::normalize(glm::dvec3{1.0, 0.0, 0.0})
+    _cubeVisualAdjustmentQuaternion = glm::angleAxis(
+        (common::pi()/2.0 - atan(1.0 / sqrt(2.0))),
+        glm::normalize(glm::dvec3{-1.0, 0.0, 1.0})
     );
 
-    _cubeInitialRotation = glm::mat4_cast(_cubeInitialQuaternion);
-
-    _eulerEquations.setPreviousQuaternion(_cubeInitialQuaternion);
+    setupSimulation();
 }
 
 void SpinApplication::onDestroy()
@@ -172,7 +168,7 @@ void SpinApplication::showBoxSettings()
     }
 
     ImGui::Checkbox("Enable simulation", &_simulationEnabled);
-    ImGui::Button("Restart simulation");
+    if (ImGui::Button("Restart simulation")) { setupSimulation(); }
 
     if (ImGui::CollapsingHeader("Simulation parameters"))
     {
@@ -181,7 +177,7 @@ void SpinApplication::showBoxSettings()
 
         ImGui::Separator();
         ImGui::Text("Initial simulation parameters:");
-        ImGui::DragFloat("Diagonal tilt angle", &_zRotationDegrees, 0.5f);
+        ImGui::DragFloat("Diagonal tilt angle", &_diagonalTiltAngle, 0.5f);
         ImGui::DragFloat(
             "Diagonal angular velocity",
             &_diagonalAngularVelocity,
@@ -202,7 +198,7 @@ void SpinApplication::showBoxSettings()
                 0.001f
             );
 
-            glm::quat displayQuat{_cubeInitialQuaternion};
+            glm::quat displayQuat{_cubeQuaternion};
             ImGui::DragFloat4(
                 "Quaternion",
                 glm::value_ptr(displayQuat),
@@ -318,7 +314,23 @@ void SpinApplication::drawArrow(
 
 glm::dmat3 SpinApplication::calculateBoxInertiaTensor()
 {
-    return calculateDiagonalInertiaTensor();
+    glm::dmat3 boxCenterInertiaTensor{
+        {2.0 * _cubeSize, 0.0, 0.0},
+        {0.0, 2.0 * _cubeSize, 0.0},
+        {0.0, 0.0, 2.0 * _cubeSize}
+    };
+
+    auto diagonalLength = _cubeSize * sqrt(3.0);
+    auto halfDiagonalLength = diagonalLength / 2;
+    auto cubeMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
+    auto ysq = cubeMass * halfDiagonalLength * halfDiagonalLength;
+    glm::dmat3 massPointInertiaTensor{
+        {ysq, 0, 0},
+        {0, 0, 0},
+        {0, 0, ysq}
+    };
+
+    return boxCenterInertiaTensor + massPointInertiaTensor;
 }
 
 glm::dmat3 SpinApplication::calculateInertiaTensorOfPointMass(
@@ -341,62 +353,65 @@ glm::dmat3 SpinApplication::calculateInertiaTensorOfPointMass(
     };
 }
 
-glm::dmat3 SpinApplication::calculateEigenvectorMatrix() const
-{
-    return glm::dmat3{
-        {-1.0, 0.0, 1.0},
-        {-1.0, 1.0, 0.0},
-        { 1.0, 1.0, 1.0}
-    };
-}
-
-glm::dmat3 SpinApplication::calculateDiagonalInertiaTensor() const
-{
-    auto mass = _cubeSize * _cubeSize * _cubeSize * _cubeDensity;
-    auto lambda1 = 11.0 * _cubeSize * _cubeSize * mass / 12.0;
-    auto lambda2 = _cubeSize * _cubeSize * mass / 6.0;
-
-    return glm::dmat3{
-        {lambda1, 0.0, 0.0},
-        {0.0, lambda1, 0.0},
-        {0.0, 0.0, lambda2}
-    };
-}
-
 float SpinApplication::getGravity() const
 {
     return _gravityEnabled ? _gravityConstant : 0.0f;
+}
+
+void SpinApplication::setupSimulation()
+{
+    _eulerEquations = std::make_shared<EulerRotationEquations>();
+
+    _angularVelocity = glm::vec3{
+        0.0f,
+        glm::radians(_diagonalAngularVelocity),
+        0.0f
+    };
+
+    _cubeQuaternion = glm::rotate(
+        glm::quat{},
+        glm::radians(_diagonalTiltAngle),
+        {0, 0, 1}
+    );
+
+    _eulerEquations->setPreviousAngularVelocity(_angularVelocity);
+    _eulerEquations->setPreviousQuaternion(_cubeQuaternion);
+
+    _trajectory.clear();
 }
 
 void SpinApplication::updateRigidBody(
     const std::chrono::high_resolution_clock::duration& deltaTime
 )
 {
+    double diagonalLength = _cubeSize * sqrt(3.0);
+    glm::mat4 cubeTransformation{glm::mat4_cast(_cubeQuaternion)};
+    auto invCubeTransformation = glm::inverse(cubeTransformation);
+
+    glm::dvec4 objectSpaceDiagonal{0, diagonalLength, 0, 1.0};
+    glm::dvec4 objectSpaceMassCenter{0, diagonalLength / 2, 0, 1.0};
+
+    glm::vec3 worldSpaceDiagonal{glm::dvec3{
+        cubeTransformation * objectSpaceDiagonal
+    }};
+
+    addTrajectoryPoint(worldSpaceDiagonal);
+
     auto deltaSeconds = std::chrono::duration<double>(deltaTime);
-    _eulerEquations.setInertiaTensor(calculateBoxInertiaTensor());
+    _eulerEquations->setInertiaTensor(calculateBoxInertiaTensor());
 
-    _testDiagonalRotationX += 0.3 * deltaSeconds.count();
-    _testDiagonalRotationY += 0.1 * deltaSeconds.count();
+    double objectMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
+    glm::dvec3 gravity{0.0, - getGravity() * objectMass, 0.0};
 
-    auto boxMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
-    _eulerEquations.setPreviousAngularVelocity(_angularVelocity);
+    _eulerEquations->setExternalForce(
+        glm::dvec3{objectSpaceMassCenter},
+        glm::dvec3{gravity}
+    );
 
-    glm::dvec3 force{0, -boxMass*getGravity(), 0};
-    auto eigenvectorMatrix = calculateEigenvectorMatrix();
-    auto invEigenvectorMatrix = glm::inverse(eigenvectorMatrix);
-    _bodyForcePoint = invEigenvectorMatrix * glm::dvec3{
-        _cubeSize / 2,
-        _cubeSize / 2,
-        _cubeSize / 2
-    };
+    _eulerEquations->update(deltaSeconds.count());
 
-    _eulerEquations.setBodyForcePoint(_bodyForcePoint);
-    _eulerEquations.setTorque(force);
-
-    _eulerEquations.update(deltaSeconds.count());
-    _angularVelocity = _eulerEquations.getAngularVelocity();
-    auto quat = _eulerEquations.getQuaternion();
-    _cubeInitialRotation = glm::mat4_cast(quat);
+    _angularVelocity = _eulerEquations->getAngularVelocity();
+    _cubeQuaternion = _eulerEquations->getQuaternion();
 }
 
 void SpinApplication::renderGroundGrid()
@@ -418,16 +433,13 @@ void SpinApplication::renderFrame()
 
 void SpinApplication::renderCube()
 {
-    glm::mat4 cubeTransformation = _cubeInitialRotation;
+    glm::mat4 cubeTransformation = glm::mat4{glm::mat4_cast(
+        _cubeQuaternion
+    )};
 
-    auto eigenvectorMatrix = calculateEigenvectorMatrix();
-    auto invEigen = glm::inverse(eigenvectorMatrix);
-    cubeTransformation *= glm::mat4{
-        { invEigen[0], 0 },
-        { invEigen[1], 0 },
-        { invEigen[2], 0 },
-        { 0, 0, 0, 1.0 }
-    };
+    cubeTransformation *= glm::mat4{glm::mat4_cast(
+        _cubeVisualAdjustmentQuaternion
+    )};
 
     cubeTransformation = glm::translate(
         cubeTransformation,
@@ -461,25 +473,15 @@ void SpinApplication::renderCubeDiagonal()
 {
     double diagonalLength = _cubeSize * sqrt(3.0);
 
-    // todo: transform cube diagonal using real matrices
-    auto rotation = glm::rotate(
-        glm::dmat4{},
-        _testDiagonalRotationY,
-        {0, 1, 0}
-    );
+    glm::mat4 cubeTransformation = glm::mat4{glm::mat4_cast(
+        _cubeQuaternion
+    )};
 
-    rotation = glm::rotate(rotation, _testDiagonalRotationX, {1, 0, 0});
     glm::dvec4 objectSpaceDiagonal{0, diagonalLength, 0, 1.0};
 
-    glm::vec3 worldSpaceDiagonal{glm::dvec3{rotation * objectSpaceDiagonal}};
-
-    // todo: move this part somewhere elese
-    if (_trajectory.size() + 1 >= _dynamicPolygonalLine->getNumMaxVertices())
-    {
-        // todo: unefficient, create cyclic vector for that purpose
-        _trajectory.erase(std::begin(_trajectory));
-    }
-    _trajectory.push_back(worldSpaceDiagonal);
+    glm::vec3 worldSpaceDiagonal{glm::dvec3{
+        cubeTransformation * objectSpaceDiagonal
+    }};
 
     drawArrow({0, 0, 0}, worldSpaceDiagonal, {1.0f, 0.0f, 1.0f}, 0.02f);
 }
@@ -505,6 +507,16 @@ void SpinApplication::renderTrajectory()
 
 void SpinApplication::renderGravityVector()
 {
+}
+
+void SpinApplication::addTrajectoryPoint(glm::vec3 trajectoryPoint)
+{
+    if (_trajectory.size() + 1 >= _dynamicPolygonalLine->getNumMaxVertices())
+    {
+        // todo: unefficient, create cyclic vector for that purpose
+        _trajectory.erase(std::begin(_trajectory));
+    }
+    _trajectory.push_back(trajectoryPoint);
 }
 
 }
