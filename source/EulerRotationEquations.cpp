@@ -39,6 +39,8 @@ void EulerRotationEquations::setInertiaTensor(glm::dmat3 inertiaTensor)
 
 void EulerRotationEquations::update(double dt)
 {
+    dt = std::min(dt, 1.0/45);
+
     _previousAngularVelocity = _angularVelocity;
     _previousQuaternion = _quaternion;
 

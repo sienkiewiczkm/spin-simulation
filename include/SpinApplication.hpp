@@ -68,6 +68,7 @@ private:
     void renderCubeDiagonal();
     void renderTrajectory();
     void renderGravityVector();
+    void renderTorqueVector();
 
     void addTrajectoryPoint(glm::vec3 trajectoryPoint);
 
@@ -96,6 +97,7 @@ private:
     bool _trajectoryRenderingEnabled;
     bool _gravitationVectorRenderingEnabled;
     bool _gravitationPlaneRenderingEnabled;
+    bool _torqueRenderingEnabled;
 
     std::vector<glm::vec3> _trajectory;
     std::shared_ptr<DynamicPolygonalLine> _dynamicPolygonalLine;
@@ -107,6 +109,10 @@ private:
 
     glm::dvec3 _bodyForcePoint;
     glm::dvec3 _forceVector;
+
+    glm::dvec3 _tensorSpaceCenter;
+    glm::dvec3 _tensorSpaceGravity;
+    glm::dvec3 _tensorSpaceTorque;
 
     std::shared_ptr<fw::Grid> _grid;
     OrbitingCamera _camera;

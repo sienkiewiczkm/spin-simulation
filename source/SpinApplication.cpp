@@ -28,8 +28,9 @@ SpinApplication::SpinApplication():
     _cubeRenderingEnabled{true},
     _cubeDiagonalRenderingEnabled{true},
     _trajectoryRenderingEnabled{true},
-    _gravitationVectorRenderingEnabled{true},
-    _gravitationPlaneRenderingEnabled{true}
+    _gravitationPlaneRenderingEnabled{true},
+    _gravitationVectorRenderingEnabled{false},
+    _torqueRenderingEnabled{false}
 {
 }
 
@@ -93,10 +94,12 @@ void SpinApplication::onRender()
     glEnable(GL_DEPTH_TEST);
 
     renderFrame();
-    renderGroundGrid();
+    if (_gravitationPlaneRenderingEnabled) { renderGroundGrid(); }
     if (_cubeRenderingEnabled) { renderCube(); }
     if (_cubeDiagonalRenderingEnabled) { renderCubeDiagonal(); }
     if (_trajectoryRenderingEnabled) { renderTrajectory(); }
+    if (_gravitationVectorRenderingEnabled) { renderGravityVector(); }
+    if (_torqueRenderingEnabled) { renderTorqueVector(); }
 
     ImGuiApplication::onRender();
 }
@@ -175,7 +178,6 @@ void SpinApplication::showBoxSettings()
         ImGui::DragFloat("Cube size", &_cubeSize, 0.005f);
         ImGui::DragFloat("Cube density", &_cubeDensity, 0.001f);
 
-        ImGui::Separator();
         ImGui::Text("Initial simulation parameters:");
         ImGui::DragFloat("Diagonal tilt angle", &_diagonalTiltAngle, 0.5f);
         ImGui::DragFloat(
@@ -184,7 +186,6 @@ void SpinApplication::showBoxSettings()
             0.01f
         );
 
-        ImGui::Separator();
         ImGui::Checkbox(
             "Show dangerous settings",
             &_showDangerousSimulationSettings
@@ -207,7 +208,7 @@ void SpinApplication::showBoxSettings()
         }
     }
 
-    if (ImGui::CollapsingHeader("Gravity"))
+    if (ImGui::CollapsingHeader("Gravity settings"))
     {
         ImGui::Checkbox("Enable gravity", &_gravityEnabled);
         ImGui::SliderFloat("Gravity", &_gravityConstant, 0.0f, 50.0f);
@@ -231,13 +232,16 @@ void SpinApplication::showBoxSettings()
         if (ImGui::Button("Clear trajectory")) { _trajectory.clear(); }
 
         ImGui::Checkbox(
-            "Display gravity vector",
-            &_gravitationVectorRenderingEnabled
-        );
-        ImGui::Checkbox(
             "Display gravity plane",
             &_gravitationPlaneRenderingEnabled
         );
+
+        ImGui::Checkbox(
+            "Display gravity vector",
+            &_gravitationVectorRenderingEnabled
+        );
+
+        ImGui::Checkbox("Display torque vector", &_torqueRenderingEnabled);
     }
 
     ImGui::End();
@@ -314,20 +318,25 @@ void SpinApplication::drawArrow(
 
 glm::dmat3 SpinApplication::calculateBoxInertiaTensor()
 {
-    glm::dmat3 boxCenterInertiaTensor{
-        {2.0 * _cubeSize, 0.0, 0.0},
-        {0.0, 2.0 * _cubeSize, 0.0},
-        {0.0, 0.0, 2.0 * _cubeSize}
+    auto cubeSizeSq = _cubeSize * _cubeSize;
+    auto cubeVolume = _cubeSize * _cubeSize * _cubeSize;
+    auto cubeMass = _cubeDensity * cubeVolume;
+
+    auto boxCenterInertiaTensor = (cubeMass/12.0) * glm::dmat3{
+        {2.0 * cubeSizeSq, 0.0, 0.0},
+        {0.0, 2.0 * cubeSizeSq, 0.0},
+        {0.0, 0.0, 2.0 * cubeSizeSq}
     };
 
     auto diagonalLength = _cubeSize * sqrt(3.0);
     auto halfDiagonalLength = diagonalLength / 2;
-    auto cubeMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
+
     auto ysq = cubeMass * halfDiagonalLength * halfDiagonalLength;
+
     glm::dmat3 massPointInertiaTensor{
-        {ysq, 0, 0},
+        {ysq*ysq, 0, 0},
         {0, 0, 0},
-        {0, 0, ysq}
+        {0, 0, ysq*ysq}
     };
 
     return boxCenterInertiaTensor + massPointInertiaTensor;
@@ -390,6 +399,7 @@ void SpinApplication::updateRigidBody(
 
     glm::dvec4 objectSpaceDiagonal{0, diagonalLength, 0, 1.0};
     glm::dvec4 objectSpaceMassCenter{0, diagonalLength / 2, 0, 1.0};
+    _tensorSpaceCenter = glm::dvec3{objectSpaceMassCenter};
 
     glm::vec3 worldSpaceDiagonal{glm::dvec3{
         cubeTransformation * objectSpaceDiagonal
@@ -401,17 +411,22 @@ void SpinApplication::updateRigidBody(
     _eulerEquations->setInertiaTensor(calculateBoxInertiaTensor());
 
     double objectMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
-    glm::dvec3 gravity{0.0, - getGravity() * objectMass, 0.0};
+    glm::dvec3 worldSpaceGravity{0.0, - getGravity() * objectMass, 0.0};
 
     _eulerEquations->setExternalForce(
         glm::dvec3{objectSpaceMassCenter},
-        glm::dvec3{gravity}
+        glm::dvec3{worldSpaceGravity}
     );
 
     _eulerEquations->update(deltaSeconds.count());
 
     _angularVelocity = _eulerEquations->getAngularVelocity();
     _cubeQuaternion = _eulerEquations->getQuaternion();
+
+    auto quaternionMat = glm::mat3_cast(glm::normalize(_cubeQuaternion));
+    auto invQuaternionMat = glm::inverse(quaternionMat);
+    _tensorSpaceGravity = invQuaternionMat * worldSpaceGravity;
+    _tensorSpaceTorque = glm::cross(_tensorSpaceCenter, _tensorSpaceGravity);
 }
 
 void SpinApplication::renderGroundGrid()
@@ -507,6 +522,46 @@ void SpinApplication::renderTrajectory()
 
 void SpinApplication::renderGravityVector()
 {
+    glm::mat4 cubeTransformation = glm::mat4{glm::mat4_cast(
+        _cubeQuaternion
+    )};
+
+    auto worldSpaceMassCenter = glm::vec3{
+        cubeTransformation * glm::vec4{_tensorSpaceCenter, 1.0f}
+    };
+
+    auto worldSpaceGravity = glm::vec3{
+        cubeTransformation * glm::vec4{_tensorSpaceGravity, 0.0f}
+    };
+
+    drawArrow(
+        worldSpaceMassCenter,
+        worldSpaceMassCenter + worldSpaceGravity,
+        glm::vec3{1.0f, 1.0f, 0.0f},
+        0.02f
+    );
+}
+
+void SpinApplication::renderTorqueVector()
+{
+    glm::mat4 cubeTransformation = glm::mat4{glm::mat4_cast(
+        _cubeQuaternion
+    )};
+
+    auto worldSpaceMassCenter = glm::vec3{
+        cubeTransformation * glm::vec4{_tensorSpaceCenter, 1.0f}
+    };
+
+    auto worldSpaceTorque = glm::vec3{
+        cubeTransformation * glm::vec4{_tensorSpaceTorque, 0.0f}
+    };
+
+    drawArrow(
+        worldSpaceMassCenter,
+        worldSpaceMassCenter + worldSpaceTorque,
+        glm::vec3{0.0f, 1.0f, 1.0f},
+        0.02f
+    );
 }
 
 void SpinApplication::addTrajectoryPoint(glm::vec3 trajectoryPoint)
