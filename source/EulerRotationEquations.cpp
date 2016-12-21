@@ -10,6 +10,8 @@ EulerRotationEquations::EulerRotationEquations():
 
 void EulerRotationEquations::setPreviousQuaternion(glm::dquat quaternion)
 {
+    quaternion = glm::normalize(quaternion);
+
     _previousQuaternion = quaternion;
     _quaternion = quaternion;
 }
@@ -34,13 +36,15 @@ void EulerRotationEquations::setExternalForce(
 void EulerRotationEquations::setInertiaTensor(glm::dmat3 inertiaTensor)
 {
     _inertiaTensor = inertiaTensor;
-    _inertiaTensorInv = glm::inverse(inertiaTensor);
+    _inertiaTensorInv = glm::dmat3{
+        {1.0 / _inertiaTensor[0][0], 0.0, 0.0},
+        {0.0, 1.0 / _inertiaTensor[1][1], 0.0},
+        {0.0, 0.0, 1.0 / _inertiaTensor[2][2]}
+    };
 }
 
 void EulerRotationEquations::update(double dt)
 {
-    dt = std::min(dt, 1.0/45);
-
     _previousAngularVelocity = _angularVelocity;
     _previousQuaternion = _quaternion;
 
@@ -85,7 +89,9 @@ void EulerRotationEquations::unpackVector(
 {
     assert(input.size() == (3+4));
     angularVelocity = glm::dvec3{input[0], input[1], input[2]};
-    quaternion = glm::dquat{input[3], input[4], input[5], input[6]};
+    quaternion = glm::normalize(
+        glm::dquat{input[3], input[4], input[5], input[6]}
+    );
 }
 
 void EulerRotationEquations::evaluateFunction(
@@ -98,17 +104,17 @@ void EulerRotationEquations::evaluateFunction(
     glm::dquat quaternion;
     unpackVector(unknownFunctionValue, angularVelocity, quaternion);
 
-    auto quaternionMat = glm::mat3_cast(glm::normalize(quaternion));
     auto torque = glm::cross(
         _forcePoint,
-        glm::inverse(quaternionMat) * _force
+        glm::conjugate(quaternion) * _force
     );
 
     auto IW = _inertiaTensor * angularVelocity;
     auto angularMomentumDerivative = _inertiaTensorInv *
         (torque + glm::cross(IW, angularVelocity));
+
     auto quaternionDerivative =
-        (glm::normalize(quaternion) * glm::dquat{0, angularVelocity}) / 2.0;
+        (quaternion * glm::dquat{0, angularVelocity}) / 2.0;
 
     packVector(output, angularMomentumDerivative, quaternionDerivative);
 }

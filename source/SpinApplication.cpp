@@ -6,6 +6,8 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/quaternion.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtx/string_cast.hpp"
 #include "imgui.h"
 
 #include "Config.hpp"
@@ -84,7 +86,17 @@ void SpinApplication::onUpdate(
     showBoxSettings();
     updateGravityChart();
 
-    if (_simulationEnabled) { updateRigidBody(deltaTime); }
+    if (_simulationEnabled)
+    {
+        const double dt = 0.001;
+        double deltaSeconds = std::chrono::duration<double>(deltaTime).count();
+        bool addTrajectory = true;
+        for (double usedTime = 0.0; usedTime < deltaSeconds; usedTime += dt)
+        {
+            updateRigidBody(dt, addTrajectory);
+            addTrajectory = false;
+        }
+    }
 }
 
 void SpinApplication::onRender()
@@ -318,9 +330,9 @@ void SpinApplication::drawArrow(
 
 glm::dmat3 SpinApplication::calculateBoxInertiaTensor()
 {
-    auto cubeSizeSq = _cubeSize * _cubeSize;
-    auto cubeVolume = _cubeSize * _cubeSize * _cubeSize;
-    auto cubeMass = _cubeDensity * cubeVolume;
+    auto cubeSizeSq = static_cast<double>(_cubeSize) * _cubeSize;
+    auto cubeVolume = static_cast<double>(_cubeSize) * _cubeSize * _cubeSize;
+    auto cubeMass = cubeVolume * _cubeDensity;
 
     auto boxCenterInertiaTensor = (cubeMass/12.0) * glm::dmat3{
         {2.0 * cubeSizeSq, 0.0, 0.0},
@@ -328,18 +340,15 @@ glm::dmat3 SpinApplication::calculateBoxInertiaTensor()
         {0.0, 0.0, 2.0 * cubeSizeSq}
     };
 
-    auto diagonalLength = _cubeSize * sqrt(3.0);
+    auto diagonalLength = static_cast<double>(_cubeSize) * sqrt(3.0);
     auto halfDiagonalLength = diagonalLength / 2;
 
-    auto ysq = cubeMass * halfDiagonalLength * halfDiagonalLength;
+    auto tensor = boxCenterInertiaTensor + calculateInertiaTensorOfPointMass(
+        {0.0, halfDiagonalLength, 0.0},
+        cubeMass
+    );
 
-    glm::dmat3 massPointInertiaTensor{
-        {ysq*ysq, 0, 0},
-        {0, 0, 0},
-        {0, 0, ysq*ysq}
-    };
-
-    return boxCenterInertiaTensor + massPointInertiaTensor;
+    return tensor;
 }
 
 glm::dmat3 SpinApplication::calculateInertiaTensorOfPointMass(
@@ -362,9 +371,9 @@ glm::dmat3 SpinApplication::calculateInertiaTensorOfPointMass(
     };
 }
 
-float SpinApplication::getGravity() const
+double SpinApplication::getGravity() const
 {
-    return _gravityEnabled ? _gravityConstant : 0.0f;
+    return _gravityEnabled ? static_cast<double>(_gravityConstant) : 0.0;
 }
 
 void SpinApplication::setupSimulation()
@@ -389,12 +398,10 @@ void SpinApplication::setupSimulation()
     _trajectory.clear();
 }
 
-void SpinApplication::updateRigidBody(
-    const std::chrono::high_resolution_clock::duration& deltaTime
-)
+void SpinApplication::updateRigidBody(const double& deltaTime, bool addTrajectory)
 {
     double diagonalLength = _cubeSize * sqrt(3.0);
-    glm::mat4 cubeTransformation{glm::mat4_cast(_cubeQuaternion)};
+    glm::dmat4 cubeTransformation{glm::mat4_cast(_cubeQuaternion)};
     auto invCubeTransformation = glm::inverse(cubeTransformation);
 
     glm::dvec4 objectSpaceDiagonal{0, diagonalLength, 0, 1.0};
@@ -405,20 +412,16 @@ void SpinApplication::updateRigidBody(
         cubeTransformation * objectSpaceDiagonal
     }};
 
-    addTrajectoryPoint(worldSpaceDiagonal);
+    if (addTrajectory) { addTrajectoryPoint(worldSpaceDiagonal); }
 
-    auto deltaSeconds = std::chrono::duration<double>(deltaTime);
     _eulerEquations->setInertiaTensor(calculateBoxInertiaTensor());
 
-    double objectMass = _cubeDensity * _cubeSize * _cubeSize * _cubeSize;
+    double objectMass = static_cast<double>(_cubeDensity)
+        * _cubeSize * _cubeSize * _cubeSize;
     glm::dvec3 worldSpaceGravity{0.0, - getGravity() * objectMass, 0.0};
 
-    _eulerEquations->setExternalForce(
-        glm::dvec3{objectSpaceMassCenter},
-        glm::dvec3{worldSpaceGravity}
-    );
-
-    _eulerEquations->update(deltaSeconds.count());
+    _eulerEquations->setExternalForce(_tensorSpaceCenter, worldSpaceGravity);
+    _eulerEquations->update(deltaTime);
 
     _angularVelocity = _eulerEquations->getAngularVelocity();
     _cubeQuaternion = _eulerEquations->getQuaternion();

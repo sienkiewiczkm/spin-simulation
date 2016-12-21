@@ -62,7 +62,7 @@ void RungeKuttaMethod<TPrecision>::step(
 )
 {
     std::vector<TPrecision> k1, k2, k3, k4;
-    auto halfstep = step / 2;
+    auto halfstep = step / static_cast<TPrecision>(2.0);
 
     evaluateFunction(t, input, k1);
     evaluateFunction(t + halfstep, addVectors(input, k1, halfstep), k2);
@@ -73,7 +73,8 @@ void RungeKuttaMethod<TPrecision>::step(
 
     for (auto i = 0; i < _dimension; ++i)
     {
-        output[i] = input[i] + (step/6) * (k1[i] + 2*k2[i] + 2*k3[i] + k4[i]);
+        output[i] = input[i]
+            + (step/6.0) * (k1[i] + 2.0*k2[i] + 2.0*k3[i] + k4[i]);
     }
 }
 

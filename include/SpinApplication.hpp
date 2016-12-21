@@ -58,9 +58,7 @@ protected:
 private:
     void setupSimulation();
 
-    void updateRigidBody(
-        const std::chrono::high_resolution_clock::duration& deltaTime
-    );
+    void updateRigidBody(const double& deltaTime, bool addTrajectory);
 
     void renderGroundGrid();
     void renderFrame();
@@ -72,7 +70,7 @@ private:
 
     void addTrajectoryPoint(glm::vec3 trajectoryPoint);
 
-    float getGravity() const;
+    double getGravity() const;
 
     const int cMaximumGravityHistorySize = 200;
 
@@ -88,6 +86,8 @@ private:
     glm::dquat _cubeQuaternion;
 
     glm::vec3 _angularVelocity;
+    glm::dvec3 _currentAngularVelocity;
+
     float _diagonalAngularVelocity;
     float _diagonalTiltAngle;
 
